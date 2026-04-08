@@ -1,0 +1,73 @@
+version: "3.9"
+
+# This compose file runs the proxy alongside LibreChat — a full-featured
+# ChatGPT-like web interface that supports custom OpenAI-compatible endpoints.
+#
+# Usage:
+#   docker compose -f docker-compose.with-ui.yml up -d
+#
+# Then open http://localhost:3080 in your browser.
+
+services:
+  proxy:
+    build: .
+    image: openai-reverse-proxy:latest
+    container_name: openai-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # -------------------------------------------------------
+  # MongoDB — required by LibreChat
+  # -------------------------------------------------------
+  mongodb:
+    image: mongo:7
+    container_name: openai-proxy-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - proxy-net
+
+  # -------------------------------------------------------
+  # LibreChat — ChatGPT-like web UI
+  # Docs: https://docs.librechat.ai
+  # -------------------------------------------------------
+  librechat:
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: openai-proxy-ui
+    restart: unless-stopped
+    depends_on:
+      - proxy
+      - mongodb
+    ports:
+      - "3080:3080"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/LibreChat
+      - OPENAI_API_KEY=sk-no-key-required
+      # Point the UI at our proxy instead of OpenAI directly
+      - OPENAI_REVERSE_PROXY=http://proxy:3000/v1
+      - ALLOW_REGISTRATION=true
+      - JWT_SECRET=change-me-in-production-please
+      - JWT_REFRESH_SECRET=change-me-too-in-production
+    volumes:
+      - librechat-uploads:/app/client/public/images
+    networks:
+      - proxy-net
+
+volumes:
+  mongo-data:
+  librechat-uploads:
+
+networks:
+  proxy-net:
+    driver: bridge
