@@ -9,26 +9,34 @@ export const providerRouter = Router();
 
 // ----- Provider selection -----
 
-function selectProvider(model?: string): ProviderConfig | undefined {
+export function selectProviderFromList(
+  providers: ProviderConfig[],
+  model?: string,
+  random = Math.random
+): ProviderConfig | undefined {
   const candidates = model
-    ? config.providers.filter(
+    ? providers.filter(
         (p) =>
           p.modelPrefixes.length === 0 || // catch-all provider
           p.modelPrefixes.some((prefix) => model.startsWith(prefix) || model === prefix)
       )
-    : config.providers;
+    : providers;
 
-  const pool = candidates.length > 0 ? candidates : config.providers;
+  const pool = candidates.length > 0 ? candidates : providers;
   if (pool.length === 0) return undefined;
 
   // Weighted random selection
   const totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
-  let rand = Math.random() * totalWeight;
+  let rand = random() * totalWeight;
   for (const p of pool) {
     rand -= p.weight;
     if (rand <= 0) return p;
   }
   return pool[pool.length - 1];
+}
+
+function selectProvider(model?: string): ProviderConfig | undefined {
+  return selectProviderFromList(config.providers, model);
 }
 
 // ----- Body reading helper -----

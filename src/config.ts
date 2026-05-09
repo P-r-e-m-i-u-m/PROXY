@@ -5,9 +5,7 @@ export interface ProviderConfig {
   name: string;
   baseUrl: string;
   apiKey?: string;
-  /** Comma-separated model prefixes/names this provider handles, e.g. "gpt-,text-" */
   modelPrefixes: string[];
-  /** Weight for load-balancing when multiple providers can handle a model */
   weight: number;
 }
 
@@ -18,67 +16,57 @@ export interface AppConfig {
   rateLimitMax: number;
 }
 
-function parseProviders(): ProviderConfig[] {
+export function parseProvidersFromEnv(env: NodeJS.ProcessEnv): ProviderConfig[] {
   const providers: ProviderConfig[] = [];
 
-  // Support multiple providers via numbered env vars:
-  //   PROVIDER_1_NAME, PROVIDER_1_BASE_URL, PROVIDER_1_API_KEY, PROVIDER_1_MODEL_PREFIXES, PROVIDER_1_WEIGHT
-  // Or single via PROVIDER_BASE_URL etc.
   let index = 1;
   while (true) {
     const prefix = `PROVIDER_${index}`;
-    const baseUrl = process.env[`${prefix}_BASE_URL`];
+    const baseUrl = env[`${prefix}_BASE_URL`];
     if (!baseUrl) break;
+
     providers.push({
-      name: process.env[`${prefix}_NAME`] || `provider-${index}`,
-      baseUrl: baseUrl.replace(/\/$/, ""),
-      apiKey: process.env[`${prefix}_API_KEY`],
-      modelPrefixes: (process.env[`${prefix}_MODEL_PREFIXES`] || "").split(",").filter(Boolean),
-      weight: parseInt(process.env[`${prefix}_WEIGHT`] || "1", 10),
+      name: env[`${prefix}_NAME`] || `provider-${index}`,
+      baseUrl: trimTrailingSlash(baseUrl),
+      apiKey: env[`${prefix}_API_KEY`],
+      modelPrefixes: parseCsv(env[`${prefix}_MODEL_PREFIXES`]),
+      weight: parsePositiveInt(env[`${prefix}_WEIGHT`], 1)
     });
     index++;
   }
 
-  // Fallback: single provider from PROVIDER_BASE_URL
-  if (providers.length === 0 && process.env.PROVIDER_BASE_URL) {
+  if (providers.length === 0 && env.PROVIDER_BASE_URL) {
     providers.push({
-      name: process.env.PROVIDER_NAME || "default",
-      baseUrl: process.env.PROVIDER_BASE_URL.replace(/\/$/, ""),
-      apiKey: process.env.PROVIDER_API_KEY,
-      modelPrefixes: (process.env.PROVIDER_MODEL_PREFIXES || "").split(",").filter(Boolean),
-      weight: 1,
+      name: env.PROVIDER_NAME || "default",
+      baseUrl: trimTrailingSlash(env.PROVIDER_BASE_URL),
+      apiKey: env.PROVIDER_API_KEY,
+      modelPrefixes: parseCsv(env.PROVIDER_MODEL_PREFIXES),
+      weight: 1
     });
-  }
-
-  // Built-in free providers if none configured
-  if (providers.length === 0) {
-    const builtIn: ProviderConfig[] = [
-      {
-        name: "openai-free-1",
-        baseUrl: "https://api.openai-proxy.net",
-        modelPrefixes: ["gpt-", "text-", "dall-e", "whisper"],
-        weight: 1,
-      },
-      {
-        name: "openai-free-2",
-        baseUrl: "https://free.churchless.tech",
-        modelPrefixes: ["gpt-3", "text-davinci"],
-        weight: 1,
-      },
-    ];
-    console.warn(
-      "⚠️  No providers configured via env vars. Using built-in free endpoints.\n" +
-        "   These may be unreliable. Set PROVIDER_1_BASE_URL in your .env for a custom provider.\n"
-    );
-    return builtIn;
   }
 
   return providers;
 }
 
+function parseCsv(value = ""): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/$/, "");
+}
+
 export const config: AppConfig = {
-  port: parseInt(process.env.PORT || "3000", 10),
-  providers: parseProviders(),
-  rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
-  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || "100", 10),
+  port: parsePositiveInt(process.env.PORT, 3000),
+  providers: parseProvidersFromEnv(process.env),
+  rateLimitWindowMs: parsePositiveInt(process.env.RATE_LIMIT_WINDOW_MS, 60000),
+  rateLimitMax: parsePositiveInt(process.env.RATE_LIMIT_MAX, 100)
 };

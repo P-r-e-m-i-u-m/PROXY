@@ -1,154 +1,114 @@
-# OpenAI Reverse Proxy
+# OpenAI-Compatible API Gateway
 
-A free, self-hosted reverse proxy for the OpenAI API — written in TypeScript/Node.js.  
-Drop-in compatible with any OpenAI client library. Just change the `base_url`.
+> Self-hosted TypeScript gateway for routing OpenAI-compatible API traffic across multiple upstream providers with streaming, retries, health checks, and Prometheus-style metrics.
+
+[![CI](https://github.com/P-r-e-m-i-u-m/PROXY/actions/workflows/ci.yml/badge.svg)](https://github.com/P-r-e-m-i-u-m/PROXY/actions/workflows/ci.yml)
+
+## Why This Exists
+
+AI apps often need more than a single hardcoded provider URL. This gateway gives developers a small operational layer in front of OpenAI-compatible providers:
+
+- route requests by model prefix
+- balance traffic across multiple upstreams
+- retry failed upstream calls
+- preserve streaming responses
+- expose health and metrics endpoints
+- keep provider keys out of client-side apps
 
 ## Features
 
-- **Streaming support** — server-sent events (SSE) pass through with zero buffering
-- **Multi-provider load balancing** — configure multiple upstream endpoints with weighted routing
-- **Auto-retry** — failed requests are retried against a different provider automatically
-- **Full endpoint coverage** — chat, completions, embeddings, images, audio, files, fine-tuning, moderations
-- **Docker-first** — single `docker compose up` to run; optional bundled chat web UI (LibreChat)
-- **Zero dependency on OpenAI keys** — works with any OpenAI-compatible free endpoint
-
----
+- **OpenAI-compatible paths** under `/v1`
+- **Streaming support** for server-sent event responses
+- **Provider routing** by model prefix
+- **Weighted load balancing** across matching providers
+- **Retry fallback** when an upstream request fails
+- **Merged model listing** from configured providers
+- **Health check** at `/health`
+- **Prometheus-style metrics** at `/metrics`
+- **Docker support** with optional LibreChat stack
+- **TypeScript build and smoke tests**
 
 ## Quick Start
 
-### Option A — Docker (recommended)
-
 ```bash
-# 1. Clone the repo
-git clone https://github.com/your-username/openai-reverse-proxy.git
-cd openai-reverse-proxy
-
-# 2. Configure providers
+git clone https://github.com/P-r-e-m-i-u-m/PROXY.git
+cd PROXY
+npm install
 cp .env.example .env
-# Edit .env and set PROVIDER_1_BASE_URL to your free endpoint
-
-# 3. Start the proxy
-docker compose up -d
-
-# Proxy is now available at http://localhost:3000
+npm run check
+npm run dev
 ```
 
-### Option B — Docker with Chat UI
+The gateway runs at:
 
-Runs the proxy **plus** [LibreChat](https://docs.librechat.ai) — a full ChatGPT-like web interface.
-
-```bash
-cp .env.example .env          # configure providers
-docker compose -f docker-compose.with-ui.yml up -d
+```text
+http://localhost:3000
 ```
 
-Then open **http://localhost:3080** in your browser.
+Client base URL:
 
-### Option C — Run directly on your machine
-
-**Linux / macOS**
-```bash
-cp .env.example .env          # configure providers
-chmod +x start.sh
-./start.sh
+```text
+http://localhost:3000/v1
 ```
-
-**Windows**
-```
-copy .env.example .env
-start.bat
-```
-
-Requires **Node.js 18+**.
-
----
 
 ## Configuration
 
-All configuration is done through environment variables (`.env` file).
-
-### Provider setup
-
-You can configure one or more upstream OpenAI-compatible endpoints.
+Add at least one upstream provider to `.env`.
 
 ```env
-# Provider 1
-PROVIDER_1_NAME=my-provider
-PROVIDER_1_BASE_URL=https://your-free-endpoint.example.com
-PROVIDER_1_API_KEY=sk-optional-key      # leave blank if not needed
-PROVIDER_1_MODEL_PREFIXES=gpt-,text-    # comma-separated; empty = catch-all
-PROVIDER_1_WEIGHT=2                     # higher = more traffic in load-balancing
+PORT=3000
 
-# Provider 2 (optional fallback)
+PROVIDER_1_NAME=primary
+PROVIDER_1_BASE_URL=https://api.example.com/v1
+PROVIDER_1_API_KEY=sk-your-provider-key
+PROVIDER_1_MODEL_PREFIXES=gpt-,text-
+PROVIDER_1_WEIGHT=2
+
 PROVIDER_2_NAME=fallback
-PROVIDER_2_BASE_URL=https://another-endpoint.example.com
+PROVIDER_2_BASE_URL=https://fallback.example.com/v1
+PROVIDER_2_API_KEY=sk-fallback-key
+PROVIDER_2_MODEL_PREFIXES=
 PROVIDER_2_WEIGHT=1
 ```
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PROVIDER_N_BASE_URL` | Yes | — | Base URL of the upstream endpoint (no trailing slash) |
-| `PROVIDER_N_NAME` | No | `provider-N` | Human-readable label for logs |
-| `PROVIDER_N_API_KEY` | No | — | Injected as `Authorization: Bearer …` header |
-| `PROVIDER_N_MODEL_PREFIXES` | No | *(catch-all)* | Comma-separated model name prefixes |
-| `PROVIDER_N_WEIGHT` | No | `1` | Load-balancing weight |
-| `PORT` | No | `3000` | Port the proxy listens on |
+`MODEL_PREFIXES` can be empty. Empty means catch-all.
 
-### Finding free providers
+## Client Usage
 
-The proxy works with **any** OpenAI-compatible endpoint. Some places to find free ones:
+### Node.js
 
-- GitHub search: `openai api proxy free`  
-- [poe.com](https://poe.com) via unofficial wrappers  
-- Self-hosted [LocalAI](https://localai.io) or [Ollama](https://ollama.ai) with an OpenAI shim  
-
-> **Note:** Free third-party proxies are operated by individuals and may be unreliable, rate-limited, or log your requests. Use them at your own discretion and never send sensitive data.
-
----
-
-## Using the proxy
-
-The proxy is a drop-in replacement. Just point your client's `base_url` at it.
-
-### Python (openai SDK)
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="sk-no-key-required",   # any non-empty string
-    base_url="http://localhost:3000/v1",
-)
-
-# Streaming example
-stream = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role": "user", "content": "Hello!"}],
-    stream=True,
-)
-for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="", flush=True)
-```
-
-### Node.js (openai SDK)
-
-```typescript
+```ts
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "sk-no-key-required",
-  baseURL: "http://localhost:3000/v1",
+  apiKey: "gateway-client-key",
+  baseURL: "http://localhost:3000/v1"
 });
 
-const stream = await client.chat.completions.create({
-  model: "gpt-3.5-turbo",
-  messages: [{ role: "user", content: "Hello!" }],
-  stream: true,
+const response = await client.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages: [{ role: "user", content: "Hello from the gateway" }]
 });
 
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
-}
+console.log(response.choices[0]?.message.content);
+```
+
+### Python
+
+```py
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="gateway-client-key",
+    base_url="http://localhost:3000/v1",
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello from the gateway"}],
+)
+
+print(response.choices[0].message.content)
 ```
 
 ### curl
@@ -156,83 +116,81 @@ for await (const chunk of stream) {
 ```bash
 curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-no-key" \
+  -H "Authorization: Bearer gateway-client-key" \
   -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": true
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "Hello from the gateway"}]
   }'
 ```
 
----
+## Operations
 
-## Endpoints
-
-All standard OpenAI v1 endpoints are proxied:
-
-| Endpoint | Method |
-|---|---|
-| `/v1/chat/completions` | POST |
-| `/v1/completions` | POST |
-| `/v1/embeddings` | POST |
-| `/v1/models` | GET (merged from all providers) |
-| `/v1/images/generations` | POST |
-| `/v1/images/edits` | POST |
-| `/v1/images/variations` | POST |
-| `/v1/audio/transcriptions` | POST |
-| `/v1/audio/translations` | POST |
-| `/v1/audio/speech` | POST |
-| `/v1/files` | GET, POST |
-| `/v1/files/:id` | GET, DELETE |
-| `/v1/fine_tuning/jobs` | GET, POST |
-| `/v1/moderations` | POST |
-
-Plus two utility endpoints:
-
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Returns `{"status":"ok"}` — useful for uptime monitors |
-| `GET /metrics` | Prometheus-compatible counters |
-
----
-
-## Development
+Health:
 
 ```bash
-npm install
-cp .env.example .env
-npm run dev          # ts-node-dev with hot reload
+curl http://localhost:3000/health
 ```
 
-### Build for production
+Metrics:
 
 ```bash
-npm run build        # compiles TypeScript → dist/
-npm start
+curl http://localhost:3000/metrics
 ```
 
----
+Build and test:
 
-## Project structure
-
+```bash
+npm run check
 ```
-openai-reverse-proxy/
+
+Docker:
+
+```bash
+docker compose up -d
+```
+
+Docker with LibreChat:
+
+```bash
+docker compose -f docker-compose.with-ui.yml up -d
+```
+
+## Security Notes
+
+- Configure your own trusted upstream providers.
+- Do not send sensitive data through unknown third-party endpoints.
+- Do not commit `.env` or provider API keys.
+- Keep this gateway server-side. Do not expose provider credentials to browsers.
+- Add authentication in front of the gateway before using it outside local development.
+
+## Project Structure
+
+```text
+.
 ├── src/
-│   ├── server.ts          # Express app setup, health/metrics routes
-│   ├── providerRouter.ts  # Core proxy logic, streaming, retry, routing
-│   ├── config.ts          # Env-var config loader
-│   └── metrics.ts         # Simple in-memory Prometheus metrics
+│   ├── config.ts          environment parsing
+│   ├── metrics.ts         in-memory counters
+│   ├── providerRouter.ts  routing, retries, proxy forwarding
+│   └── server.ts          Express app and operational endpoints
+├── tests/
+│   └── smoke.test.ts      routing/config smoke tests
 ├── Dockerfile
-├── docker-compose.yml               # Proxy only
-├── docker-compose.with-ui.yml       # Proxy + LibreChat web UI
-├── start.sh                         # Linux/macOS quick-start
-├── start.bat                        # Windows quick-start
-├── .env.example
-├── package.json
-└── tsconfig.json
+├── docker-compose.yml
+└── .env.example
 ```
 
----
+## Engineering Docs
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Operations](docs/OPERATIONS.md)
+
+## Roadmap
+
+- Add API-key authentication for gateway clients
+- Add per-provider circuit breaker state
+- Add request timeout configuration
+- Add structured JSON logs
+- Add optional Redis-backed rate limiting
 
 ## License
 

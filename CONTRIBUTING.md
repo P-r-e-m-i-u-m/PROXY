@@ -1,21 +1,39 @@
-# Contributing to PROXY
+# Contributing
 
-Thanks for your interest in contributing!
+Thanks for helping improve PROXY.
 
-## How to contribute
+## Development Setup
 
-1. Fork this repo
-2. Create a new branch: `git checkout -b feature/your-feature`
-3. Make your changes
-4. Commit: `git commit -m "Add your feature"`
-5. Push: `git push origin feature/your-feature`
-6. Open a Pull Request
+```bash
+git clone https://github.com/P-r-e-m-i-u-m/PROXY.git
+cd PROXY
+cp .env.example .env
+npm install
+npm run check
+npm run dev
+```
 
-## Ideas for contribution
-- Add support for new AI providers (Groq, Together AI, Mistral, etc.)
-- Add authentication middleware
-- Add a web dashboard to monitor requests
-- Add request logging to a database
-- Improve error messages
-- Write tests
-- Improve Docker setup
+## Before Opening A PR
+
+- Keep the change focused.
+- Run `npm run check`.
+- Update docs when behavior or configuration changes.
+- Do not commit `.env`, API keys, logs, or provider credentials.
+- Explain how the change was tested.
+
+## Good Areas To Contribute
+
+- Gateway authentication
+- Provider circuit breakers
+- Request timeout configuration
+- Structured JSON logging
+- Redis-backed rate limiting
+- Integration tests with mock upstreams
+
+## Review Standard
+
+A good PR should be easy to verify. Include:
+
+- What changed
+- Why it matters
+- How to test it
