@@ -1,12 +1,12 @@
 # OpenAI-Compatible API Gateway
 
-> Self-hosted TypeScript gateway for routing OpenAI-compatible API traffic across multiple upstream providers with streaming, retries, health checks, and Prometheus-style metrics.
+> Self-hosted TypeScript gateway for routing OpenAI-compatible API traffic across multiple upstream providers with streaming, retries, health checks, Docker, and Prometheus-style metrics.
 
 [![CI](https://github.com/P-r-e-m-i-u-m/PROXY/actions/workflows/ci.yml/badge.svg)](https://github.com/P-r-e-m-i-u-m/PROXY/actions/workflows/ci.yml)
 
 ## Why This Exists
 
-AI apps often need more than a single hardcoded provider URL. This gateway gives developers a small operational layer in front of OpenAI-compatible providers:
+AI apps often need more than one hardcoded provider URL. This gateway gives developers a small operational layer in front of OpenAI-compatible providers:
 
 - route requests by model prefix
 - balance traffic across multiple upstreams
@@ -50,6 +50,21 @@ Client base URL:
 ```text
 http://localhost:3000/v1
 ```
+
+## Fork And Customize
+
+This project is designed to be forked for your own AI gateway setup.
+
+Common fork ideas:
+
+- connect your own OpenAI-compatible provider
+- route local models and hosted models through one endpoint
+- add authentication before public deployment
+- add Redis-backed rate limiting
+- add structured logs for production monitoring
+- connect the gateway to LibreChat or an internal AI app
+
+Start here: [docs/FORK_AND_DEPLOY.md](docs/FORK_AND_DEPLOY.md).
 
 ## Configuration
 
@@ -117,10 +132,7 @@ print(response.choices[0].message.content)
 curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer gateway-client-key" \
-  -d '{
-    "model": "gpt-4o-mini",
-    "messages": [{"role": "user", "content": "Hello from the gateway"}]
-  }'
+  -d @examples/chat-completion.request.json
 ```
 
 ## Operations
@@ -167,22 +179,26 @@ docker compose -f docker-compose.with-ui.yml up -d
 
 ```text
 .
-├── src/
-│   ├── config.ts          environment parsing
-│   ├── metrics.ts         in-memory counters
-│   ├── providerRouter.ts  routing, retries, proxy forwarding
-│   └── server.ts          Express app and operational endpoints
-├── tests/
-│   └── smoke.test.ts      routing/config smoke tests
-├── Dockerfile
-├── docker-compose.yml
-└── .env.example
+|-- src/
+|   |-- config.ts
+|   |-- metrics.ts
+|   |-- providerRouter.ts
+|   `-- server.ts
+|-- tests/
+|   `-- smoke.test.ts
+|-- docs/
+|-- examples/
+|-- Dockerfile
+|-- docker-compose.yml
+`-- .env.example
 ```
 
 ## Engineering Docs
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operations](docs/OPERATIONS.md)
+- [Fork and deploy guide](docs/FORK_AND_DEPLOY.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## Roadmap
 
