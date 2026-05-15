@@ -1,0 +1,22 @@
+name: AI Change Passport
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  passport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: P-r-e-m-i-u-m/ai-change-passport@v0
+        with:
+          agent: codex
+          comment: true
